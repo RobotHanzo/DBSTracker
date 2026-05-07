@@ -4,7 +4,7 @@ import axios from 'axios';
 import { CandleChart } from './Chart';
 
 type Pair = 'SGD' | 'USD';
-type Interval = '5m' | '15m' | '1h';
+type Interval = '30m' | '1h' | '12h' | '1d' | '1w' | 'custom';
 
 interface RateDoc {
   currency: string;
@@ -21,13 +21,16 @@ export default function App() {
   });
 
   const [activePair, setActivePair] = useState<Pair>('SGD');
-  const [interval, setInterval] = useState<Interval>('5m');
+  const [interval, setInterval] = useState<Interval>('1h');
   const [rates, setRates] = useState<RateDoc[]>([]);
   const [latestRates, setLatestRates] = useState<Record<string, RateDoc>>({});
   const [effectiveDate, setEffectiveDate] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [showCustomInterval, setShowCustomInterval] = useState(false);
+  const [customVal, setCustomVal] = useState<number>(1);
+  const [customUnit, setCustomUnit] = useState<'m' | 'h' | 'd'>('h');
 
   // Sync theme to DOM
   useEffect(() => {
@@ -74,9 +77,16 @@ export default function App() {
   const chartData = React.useMemo(() => {
     if (!rates.length) return [];
     
-    let bucketMs = 5 * 60 * 1000;
-    if (interval === '15m') bucketMs = 15 * 60 * 1000;
+    let bucketMs = 30 * 60 * 1000;
     if (interval === '1h') bucketMs = 60 * 60 * 1000;
+    if (interval === '12h') bucketMs = 12 * 60 * 60 * 1000;
+    if (interval === '1d') bucketMs = 24 * 60 * 60 * 1000;
+    if (interval === '1w') bucketMs = 7 * 24 * 60 * 60 * 1000;
+    if (interval === 'custom') {
+      const multiplier = customUnit === 'd' ? 24 * 60 * 60 * 1000 : customUnit === 'h' ? 60 * 60 * 1000 : 60 * 1000;
+      bucketMs = customVal * multiplier;
+      if (bucketMs <= 0) bucketMs = 60 * 1000; // fallback to 1m
+    }
 
     const map = new Map<number, { time: number; open: number; high: number; low: number; close: number }>();
 
@@ -101,7 +111,7 @@ export default function App() {
     });
 
     return Array.from(map.values()).sort((a,b) => a.time - b.time);
-  }, [rates, interval]);
+  }, [rates, interval, customVal, customUnit]);
 
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
 
@@ -217,10 +227,13 @@ export default function App() {
             </div>
             
             <div className="hidden sm:flex bg-slate-200 dark:bg-slate-900 rounded-lg p-1 border border-slate-300 dark:border-slate-800 shadow-inner text-xs font-bold w-auto">
-              {(['5m', '15m', '1h'] as Interval[]).map(inv => (
+              {(['30m', '1h', '12h', '1d', '1w', 'custom'] as Interval[]).map(inv => (
                 <button 
                   key={inv}
-                  onClick={() => setInterval(inv)}
+                  onClick={() => {
+                  if (inv === 'custom') setShowCustomInterval(true);
+                  setInterval(inv);
+                }}
                   className={`flex-1 sm:flex-none px-4 py-1.5 rounded-md transition-colors ${
                     interval === inv 
                       ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
@@ -251,7 +264,7 @@ export default function App() {
 
           {/* Mobile Interval Selector */}
           <div className="flex sm:hidden mt-4 bg-slate-200 dark:bg-slate-900 rounded-lg p-1 border border-slate-300 dark:border-slate-800 shadow-inner text-xs font-bold w-full overflow-x-auto">
-            {(['5m', '15m', '1h'] as Interval[]).map(inv => (
+            {(['30m', '1h', '12h', '1d', '1w', 'custom'] as Interval[]).map(inv => (
               <button 
                 key={inv}
                 onClick={() => setInterval(inv)}
@@ -305,6 +318,38 @@ export default function App() {
               onClick={() => setShowDisclaimer(false)}
             >
               Close
+            </button>
+          </div>
+        </div>
+      )}
+      {/* Custom Interval Modal */}
+      {showCustomInterval && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowCustomInterval(false)}>
+          <div className="bg-white dark:bg-[#1e293b] p-6 rounded-xl shadow-2xl max-w-sm w-full border border-slate-200 dark:border-slate-700" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Custom Interval</h3>
+            <div className="flex gap-4 mb-6">
+              <input 
+                type="number" 
+                min="1"
+                value={customVal}
+                onChange={(e) => setCustomVal(Number(e.target.value) || 1)}
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <select 
+                value={customUnit}
+                onChange={(e) => setCustomUnit(e.target.value as 'm' | 'h' | 'd')}
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="m">Minutes</option>
+                <option value="h">Hours</option>
+                <option value="d">Days</option>
+              </select>
+            </div>
+            <button 
+              className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold text-sm transition-colors"
+              onClick={() => setShowCustomInterval(false)}
+            >
+              Apply
             </button>
           </div>
         </div>
