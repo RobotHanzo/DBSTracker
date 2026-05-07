@@ -20,11 +20,11 @@ export default defineConfig(({mode}) => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks: {
-            'vendor-recharts': ['recharts'],
-            'vendor-motion': ['motion'],
-            'vendor-icons': ['lucide-react'],
-            'vendor-react': ['react', 'react-dom'],
+          manualChunks(id) {
+            if (id.includes('node_modules/recharts')) return 'vendor-recharts';
+            if (id.includes('node_modules/motion')) return 'vendor-motion';
+            if (id.includes('node_modules/lucide-react')) return 'vendor-icons';
+            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) return 'vendor-react';
           },
         },
       },
