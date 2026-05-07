@@ -91,11 +91,18 @@ async function fetchAndStoreRates() {
 app.get('/api/rates', async (req, res) => {
   if (!isDbConnected) return res.json([]);
   try {
-    const { currency, limit } = req.query;
-    
-    const filter = currency ? { currency: currency as string } : {};
-    const queryLimit = parseInt(limit as string) || 500;
-    
+    const { currency, limit, from, to } = req.query;
+
+    const filter: Record<string, any> = {};
+    if (currency) filter.currency = currency as string;
+    if (from || to) {
+      filter.timestamp = {};
+      if (from) filter.timestamp.$gte = new Date(from as string);
+      if (to)   filter.timestamp.$lte = new Date(to as string);
+    }
+
+    const queryLimit = parseInt(limit as string) || 2000;
+
     const rates = await Rate.find(filter)
       .sort({ timestamp: 1 })
       .limit(queryLimit);

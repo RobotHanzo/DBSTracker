@@ -10,6 +10,23 @@ import { DisclaimerModal, CustomIntervalModal } from './components/Modals';
 import type { Pair, Interval, RateDoc } from './types';
 import { INTERVALS, PAIRS } from './types';
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+/** Format a Date as the value string expected by <input type="datetime-local"> */
+export const toDatetimeLocal = (date: Date): string => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+/** How many hours of data to show by default for each candle interval */
+const defaultRangeHours: Record<Interval, number> = {
+  '30m':  24,        // 48 candles
+  '1h':   24 * 7,    // 168 candles
+  '12h':  24 * 30,   // 60 candles
+  '1d':   24 * 90,   // 90 candles
+  '1w':   24 * 365,  // 52 candles
+  'custom': 24,
+};
+
 export default function App() {
   // ── Persisted preferences ──────────────────────────────────────────────────
   const [theme, setTheme] = useState<'light' | 'dark'>(() =>
@@ -31,6 +48,18 @@ export default function App() {
   const [customUnit, setCustomUnit] = useState<'m' | 'h' | 'd'>('h');
   const [slideDir, setSlideDir] = useState<'left' | 'right' | 'up' | 'down'>('left');
 
+  // ── Date range state ───────────────────────────────────────────────────────
+  // presetHours: 0 = custom (user edited manually), >0 = preset
+  const [presetHours, setPresetHours] = useState<number>(() => {
+    const storedInterval = (localStorage.getItem('interval') as Interval) || '1h';
+    return defaultRangeHours[storedInterval];
+  });
+  const [fromDate, setFromDate] = useState<string>(() => {
+    const hours = defaultRangeHours[(localStorage.getItem('interval') as Interval) || '1h'];
+    return toDatetimeLocal(new Date(Date.now() - hours * 3_600_000));
+  });
+  const [toDate, setToDate] = useState<string>(() => toDatetimeLocal(new Date()));
+
   // ── Data state ─────────────────────────────────────────────────────────────
   const [rates, setRates] = useState<RateDoc[]>([]);
   const [latestRates, setLatestRates] = useState<Record<string, RateDoc>>({});
@@ -47,8 +76,11 @@ export default function App() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      const params = new URLSearchParams({ currency: activePair });
+      if (fromDate) params.set('from', new Date(fromDate).toISOString());
+      if (toDate)   params.set('to',   new Date(toDate).toISOString());
       const [historyRes, latestRes] = await Promise.all([
-        axios.get(`/api/rates?currency=${activePair}`),
+        axios.get(`/api/rates?${params}`),
         axios.get('/api/latest'),
       ]);
       setRates(historyRes.data);
@@ -69,7 +101,7 @@ export default function App() {
     fetchData();
     const timer = window.setInterval(fetchData, 60 * 1000);
     return () => clearInterval(timer);
-  }, [activePair]);
+  }, [activePair, fromDate, toDate]);
 
   // ── OHLC bucketing ─────────────────────────────────────────────────────────
   const chartData = React.useMemo(() => {
@@ -101,6 +133,22 @@ export default function App() {
     return Array.from(map.values()).sort((a, b) => a.time - b.time);
   }, [rates, interval, customVal, customUnit]);
 
+  // ── Range helpers ──────────────────────────────────────────────────────────
+  const applyPreset = (hours: number) => {
+    const now = new Date();
+    setPresetHours(hours);
+    setFromDate(toDatetimeLocal(new Date(now.getTime() - hours * 3_600_000)));
+    setToDate(toDatetimeLocal(now));
+  };
+
+  const handleFromDateChange = (v: string) => { setPresetHours(0); setFromDate(v); };
+  const handleToDateChange   = (v: string) => { setPresetHours(0); setToDate(v); };
+
+  const clearRange = () => {
+    const hours = defaultRangeHours[interval];
+    applyPreset(hours);
+  };
+
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handleSetInterval = (inv: Interval) => {
     const oldIdx = INTERVALS.indexOf(interval);
@@ -109,6 +157,8 @@ export default function App() {
     if (inv === 'custom') setShowCustomInterval(true);
     setInterval(inv);
     localStorage.setItem('interval', inv);
+    // Auto-update range to sensible default for the new candle interval
+    applyPreset(defaultRangeHours[inv]);
   };
 
   const handleSetPair = (pair: Pair) => {
@@ -143,6 +193,13 @@ export default function App() {
           isDark={theme === 'dark'}
           slideDir={slideDir}
           chartData={chartData}
+          fromDate={fromDate}
+          toDate={toDate}
+          presetHours={presetHours}
+          onFromDateChange={handleFromDateChange}
+          onToDateChange={handleToDateChange}
+          onApplyPreset={applyPreset}
+          onClearRange={clearRange}
           onOpenSidebar={() => setSidebarOpen(true)}
           onSetInterval={handleSetInterval}
         />
