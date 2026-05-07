@@ -1,5 +1,5 @@
-# Use Node 20 slim image which balances size and compatibility
-FROM node:20-slim
+# Use Node 24 slim image which balances size and compatibility
+FROM node:24-slim
 
 # Install system dependencies required for compiling native modules like better-sqlite3
 RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
