@@ -5,28 +5,40 @@ DBSTracker is a real-time currency conversion tracking application. It tracks Fo
 ## Features
 
 - **Live Data**: Fetches the latest exchange rates every 5 minutes automatically.
-- **Historical Charts**: Visualizes exchange rate history using Candlestick charts (powered by Recharts).
-- **Time Intervals**: View charts by different bucket sizes (5m, 15m, 1h).
+- **24-Hour Price Change**: Dynamically calculates and displays the 24-hour percentage change.
+- **Historical Charts**: Visualizes exchange rate history using Candlestick charts.
+- **Time Intervals**: View charts by different bucket sizes (30m, 1h, 12h, 1d, 1w) or configure a completely custom interval.
 - **Dark/Light Mode**: Full sleek responsive UI with automatic/manual theme toggling.
-- **Local Database**: Built-in SQLite database (`better-sqlite3`) to efficiently store and serve historical Forex records.
+- **Database Backend**: Uses MongoDB (via Mongoose) to efficiently store and serve historical Forex records.
 
 ## Setup Instructions
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/en/) (v18 or higher recommended)
-- `npm` or `yarn`
+
+- [Node.js](https://nodejs.org/en/) (v20 or higher recommended)
+- `yarn` package manager
+- MongoDB Database (Local or MongoDB Atlas)
+
+### Environment Variables
+
+Create a `.env` file in the root directory and configure your MongoDB connection and port:
+
+```env
+PORT=3000
+MONGODB_URI=mongodb://localhost:27017/DBSTracker
+```
 
 ### Local Development
 
 1. **Install Dependencies**
+
    ```bash
-   npm install
+   yarn install --frozen-lockfile
    ```
-   *(or `yarn install` if preferred)*
 
 2. **Start the Development Server**
    ```bash
-   npm run dev
+   yarn dev
    ```
    This will start both the Express backend and Vite frontend together in development mode.
    The application will be available at [http://localhost:3000](http://localhost:3000).
@@ -34,43 +46,53 @@ DBSTracker is a real-time currency conversion tracking application. It tracks Fo
 ### Production Build
 
 1. **Build the Application**
+
    ```bash
-   npm run build
+   yarn build
    ```
+
    This builds the React frontend for production into the `dist` directory.
 
 2. **Start the Production Server**
    ```bash
-   npm start
+   yarn start
    ```
    This runs the Express server using the compiled outputs.
 
-## Docker Deployment (Easy Container Building)
+## Docker Deployment
 
-You can easily package and run this application inside a Docker container.
+You can easily package and run this application inside a Docker container:
+
+```bash
+docker run -p 3000:3000 -e MONGODB_URI="your_mongo_connection_string" -d --name dbstracker robothanzo/dbstracker:latest
+```
+
+Or should you want to modify the code and deploy your own copy:
 
 ### 1. Build the Docker Image
 
 Run the following command in the project root:
+
 ```bash
 docker build -t dbstracker .
 ```
 
 ### 2. Run the Docker Container
 
-Once built, you can run the container and expose it on port 3000:
-```bash
-docker run -p 3000:3000 -d --name dbstracker-app dbstracker
-```
-The application will be accessible at [http://localhost:3000](http://localhost:3000).
+Once built, you can run the container and expose it on port 3000. Be sure to pass your MongoDB connection string as an environment variable:
 
-*Note: The SQLite database file (`currency.db`) is stored locally inside the container at `/app/currency.db`. For persistent data storage across container restarts, consider mounting a Docker volume to the application directory.*
+```bash
+docker run -p 3000:3000 -e MONGODB_URI="your_mongo_connection_string" -d --name dbstracker dbstracker
+```
+
+The application will be accessible at [http://localhost:3000](http://localhost:3000).
 
 ### 3. Automated Docker Hub Deployment (GitHub Actions)
 
-A GitHub Actions workflow is included to automatically build and push the Docker image to Docker Hub whenever you push to the `main` or `master` branch.
+A GitHub Actions workflow is included to automatically build and push the Docker image to Docker Hub whenever you push to the `main` branch.
 
 To enable this:
+
 1. Go to your GitHub repository **Settings** > **Secrets and variables** > **Actions**.
 2. Add the following **Repository secrets**:
    - `DOCKERHUB_USERNAME`: Your Docker Hub username.
