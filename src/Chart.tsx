@@ -33,8 +33,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 const ANIM_STYLE = `
 @keyframes candle-wick-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from { opacity: 0; transform: scaleY(0); }
+  to   { opacity: 1; transform: scaleY(1); }
 }
 @keyframes candle-body-in {
   from { opacity: 0; transform: scaleY(0); }
@@ -42,9 +42,9 @@ const ANIM_STYLE = `
 }
 `;
 
-// Rendered by Recharts — receives staggerMs from the shape factory
+// Rendered by Recharts — receives staggerMs and isDark from the shape factory
 const Candlestick = (props: any) => {
-  const { x, y, width, height, payload, index, staggerMs } = props;
+  const { x, y, width, height, payload, index, staggerMs, isDark } = props;
   const { open, close, high, low } = payload;
 
   const isGrowing = close >= open;
@@ -62,9 +62,9 @@ const Candlestick = (props: any) => {
   const centerX   = x + width / 2;
   const wickWidth = Math.max(width * 0.05, 1);
 
-  // Each candle starts after the previous one has fully finished
-  const wickDelay = index * staggerMs;
-  const bodyDelay = wickDelay + Math.round(staggerMs * 0.4); // body starts after wick
+  // Body animates first, wick starts after body finishes
+  const bodyDelay = index * staggerMs;
+  const wickDelay = bodyDelay + Math.round(staggerMs * 0.6); // wick starts after body
 
   // openY is the correct transform-origin for both directions:
   //   bullish → openY = bottom of body → grows upward
@@ -75,8 +75,12 @@ const Candlestick = (props: any) => {
     <g>
       <line
         x1={centerX} y1={y} x2={centerX} y2={y + height}
-        stroke={color} strokeWidth={wickWidth}
-        style={{ animation: `candle-wick-in ${Math.round(staggerMs * 0.4)}ms ease-out ${wickDelay}ms both` }}
+        stroke={isDark ? 'white' : 'black'} strokeWidth={1} strokeOpacity={0.5}
+        style={{
+          transformBox: 'fill-box',
+          transformOrigin: '50% 50%',
+          animation: `candle-wick-in ${Math.round(staggerMs * 0.4)}ms ease-out ${wickDelay}ms both`,
+        }}
       />
       <rect
         x={x + width * 0.1}
@@ -108,10 +112,10 @@ export function CandleChart({ data, isDark }: ChartProps) {
     [data.length]
   );
 
-  // Shape factory so Candlestick receives staggerMs without React context
+  // Shape factory so Candlestick receives staggerMs and isDark without React context
   const CandlestickShape = useMemo(
-    () => (props: any) => <Candlestick {...props} staggerMs={staggerMs} />,
-    [staggerMs]
+    () => (props: any) => <Candlestick {...props} staggerMs={staggerMs} isDark={isDark} />,
+    [staggerMs, isDark]
   );
 
   const yMin = Math.min(...data.map(d => d.low));

@@ -1,41 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Moon, Sun, RefreshCw, Menu, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 import axios from 'axios';
-import { CandleChart } from './Chart';
 
-type Pair = 'SGD' | 'USD';
-type Interval = '30m' | '1h' | '12h' | '1d' | '1w' | 'custom';
+import { Header } from './components/Header';
+import { Sidebar } from './components/Sidebar';
+import { ChartArea } from './components/ChartArea';
+import { Footer } from './components/Footer';
+import { DisclaimerModal, CustomIntervalModal } from './components/Modals';
 
-const FLAGS: Record<string, string> = {
-  SGD: '🇸🇬',
-  USD: '🇺🇸',
-  TWD: '🇹🇼',
-};
-
-interface RateDoc {
-  currency: string;
-  timestamp: string;
-  ttSell: number;
-  previousTtSell?: number;
-}
+import type { Pair, Interval, RateDoc } from './types';
+import { INTERVALS, PAIRS } from './types';
 
 export default function App() {
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    return localStorage.getItem('theme') as 'light' | 'dark' || 
-      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  });
-
+  // ── Persisted preferences ──────────────────────────────────────────────────
+  const [theme, setTheme] = useState<'light' | 'dark'>(() =>
+    (localStorage.getItem('theme') as 'light' | 'dark') ||
+    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+  );
   const [activePair, setActivePair] = useState<Pair>(
     () => (localStorage.getItem('activePair') as Pair) || 'SGD'
   );
   const [interval, setInterval] = useState<Interval>(
     () => (localStorage.getItem('interval') as Interval) || '1h'
   );
-  const [rates, setRates] = useState<RateDoc[]>([]);
-  const [latestRates, setLatestRates] = useState<Record<string, RateDoc>>({});
-  const [effectiveDate, setEffectiveDate] = useState<string>('');
-  const [loading, setLoading] = useState(true);
+
+  // ── UI state ───────────────────────────────────────────────────────────────
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [showCustomInterval, setShowCustomInterval] = useState(false);
@@ -43,51 +31,29 @@ export default function App() {
   const [customUnit, setCustomUnit] = useState<'m' | 'h' | 'd'>('h');
   const [slideDir, setSlideDir] = useState<'left' | 'right' | 'up' | 'down'>('left');
 
-  const INTERVALS: Interval[] = ['30m', '1h', '12h', '1d', '1w', 'custom'];
-  const PAIRS: Pair[] = ['SGD', 'USD'];
+  // ── Data state ─────────────────────────────────────────────────────────────
+  const [rates, setRates] = useState<RateDoc[]>([]);
+  const [latestRates, setLatestRates] = useState<Record<string, RateDoc>>({});
+  const [effectiveDate, setEffectiveDate] = useState<string>('');
+  const [loading, setLoading] = useState(true);
 
-  const handleSetInterval = (inv: Interval) => {
-    const oldIdx = INTERVALS.indexOf(interval);
-    const newIdx = INTERVALS.indexOf(inv);
-    setSlideDir(newIdx > oldIdx ? 'left' : 'right');
-    if (inv === 'custom') setShowCustomInterval(true);
-    setInterval(inv);
-    localStorage.setItem('interval', inv);
-  };
-
-  const handleSetPair = (pair: Pair) => {
-    const oldIdx = PAIRS.indexOf(activePair);
-    const newIdx = PAIRS.indexOf(pair);
-    setSlideDir(newIdx > oldIdx ? 'down' : 'up');
-    setActivePair(pair);
-    localStorage.setItem('activePair', pair);
-    setSidebarOpen(false);
-  };
-
-  // Sync theme to DOM
+  // ── Theme sync ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', theme === 'dark');
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // Fetch data
+  // ── Data fetching ──────────────────────────────────────────────────────────
   const fetchData = async () => {
     try {
       setLoading(true);
       const [historyRes, latestRes] = await Promise.all([
         axios.get(`/api/rates?currency=${activePair}`),
-        axios.get('/api/latest')
+        axios.get('/api/latest'),
       ]);
       setRates(historyRes.data);
-      
       const latestMap: Record<string, RateDoc> = {};
-      latestRes.data.rates.forEach((r: RateDoc) => {
-        latestMap[r.currency] = r;
-      });
+      latestRes.data.rates.forEach((r: RateDoc) => { latestMap[r.currency] = r; });
       setLatestRates(latestMap);
       if (latestRes.data.timestamp) {
         setEffectiveDate(new Date(latestRes.data.timestamp).toLocaleString());
@@ -101,337 +67,102 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
-    const timer = window.setInterval(fetchData, 60 * 1000); // 1 minute poll for frontend
+    const timer = window.setInterval(fetchData, 60 * 1000);
     return () => clearInterval(timer);
   }, [activePair]);
 
-  // Process data into OHLC based on interval
+  // ── OHLC bucketing ─────────────────────────────────────────────────────────
   const chartData = React.useMemo(() => {
     if (!rates.length) return [];
-    
     let bucketMs = 30 * 60 * 1000;
-    if (interval === '1h') bucketMs = 60 * 60 * 1000;
+    if (interval === '1h')  bucketMs = 60 * 60 * 1000;
     if (interval === '12h') bucketMs = 12 * 60 * 60 * 1000;
-    if (interval === '1d') bucketMs = 24 * 60 * 60 * 1000;
-    if (interval === '1w') bucketMs = 7 * 24 * 60 * 60 * 1000;
+    if (interval === '1d')  bucketMs = 24 * 60 * 60 * 1000;
+    if (interval === '1w')  bucketMs = 7 * 24 * 60 * 60 * 1000;
     if (interval === 'custom') {
-      const multiplier = customUnit === 'd' ? 24 * 60 * 60 * 1000 : customUnit === 'h' ? 60 * 60 * 1000 : 60 * 1000;
-      bucketMs = customVal * multiplier;
-      if (bucketMs <= 0) bucketMs = 60 * 1000; // fallback to 1m
+      const mult = customUnit === 'd' ? 86400000 : customUnit === 'h' ? 3600000 : 60000;
+      bucketMs = Math.max(customVal * mult, 60000);
     }
-
     const map = new Map<number, { time: number; open: number; high: number; low: number; close: number }>();
-
     rates.forEach((r, i) => {
       if (!r.ttSell) return;
       const t = new Date(r.timestamp).getTime();
-      const bucketIdx = Math.floor(t / bucketMs) * bucketMs;
-
-      // Make open the previous close if possible to simulate continuous candles
-      let val = r.ttSell;
-
-      if (!map.has(bucketIdx)) {
-         // Try to find previous bucket's close for open, otherwise use val
-         const prevClose = i > 0 && rates[i-1].ttSell ? rates[i-1].ttSell : val;
-         map.set(bucketIdx, { time: bucketIdx, open: prevClose, high: val, low: val, close: val });
+      const key = Math.floor(t / bucketMs) * bucketMs;
+      if (!map.has(key)) {
+        const prevClose = i > 0 && rates[i - 1].ttSell ? rates[i - 1].ttSell : r.ttSell;
+        map.set(key, { time: key, open: prevClose, high: r.ttSell, low: r.ttSell, close: r.ttSell });
       } else {
-         const bucket = map.get(bucketIdx)!;
-         bucket.high = Math.max(bucket.high, val);
-         bucket.low = Math.min(bucket.low, val);
-         bucket.close = val;
+        const b = map.get(key)!;
+        b.high = Math.max(b.high, r.ttSell);
+        b.low = Math.min(b.low, r.ttSell);
+        b.close = r.ttSell;
       }
     });
-
-    return Array.from(map.values()).sort((a,b) => a.time - b.time);
+    return Array.from(map.values()).sort((a, b) => a.time - b.time);
   }, [rates, interval, customVal, customUnit]);
 
-  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
-
-  const chartVariants = {
-    enter: (dir: typeof slideDir) => ({
-      opacity: 0,
-      x: dir === 'left' ? '100%' : dir === 'right' ? '-100%' : 0,
-      y: dir === 'down' ? '100%' : dir === 'up' ? '-100%' : 0,
-    }),
-    center: { opacity: 1, x: 0, y: 0 },
-    exit: (dir: typeof slideDir) => ({
-      opacity: 0,
-      x: dir === 'left' ? '-100%' : dir === 'right' ? '100%' : 0,
-      y: dir === 'down' ? '-100%' : dir === 'up' ? '100%' : 0,
-    }),
+  // ── Handlers ───────────────────────────────────────────────────────────────
+  const handleSetInterval = (inv: Interval) => {
+    const oldIdx = INTERVALS.indexOf(interval);
+    const newIdx = INTERVALS.indexOf(inv);
+    setSlideDir(newIdx > oldIdx ? 'left' : 'right');
+    if (inv === 'custom') setShowCustomInterval(true);
+    setInterval(inv);
+    localStorage.setItem('interval', inv);
   };
 
-  // Helper for UI pair
-  const renderPairCard = (pair: Pair) => {
-    const isActive = activePair === pair;
-    const latest = latestRates[pair];
-    const price = latest?.ttSell ? latest.ttSell.toFixed(3) : '...';
-    
-    let changePctStr = '';
-    let isPositive = false;
-    let isNegative = false;
-    if (latest && latest.previousTtSell && latest.ttSell) {
-      const diff = latest.ttSell - latest.previousTtSell;
-      const pct = (diff / latest.previousTtSell) * 100;
-      isPositive = pct > 0;
-      isNegative = pct < 0;
-      changePctStr = `${isPositive ? '+' : ''}${pct.toFixed(2)}%`;
-    }
-
-    return (
-      <div 
-        onClick={() => {
-          handleSetPair(pair);
-        }}
-        className={`p-4 rounded-xl border transition-all cursor-pointer ${
-          isActive 
-            ? 'bg-white dark:bg-[#1e293b] border-indigo-500 ring-1 ring-indigo-500/20 shadow-lg' 
-            : 'bg-slate-50 dark:bg-[#1e293b]/50 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-        }`}
-      >
-        <div className="flex justify-between items-start mb-1">
-          <span className={`font-bold ${isActive ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>
-            {FLAGS[pair]} {pair} / {FLAGS.TWD} TWD
-          </span>
-          {changePctStr ? (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${isPositive ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : isNegative ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'}`}>
-              {changePctStr}
-            </span>
-          ) : (
-            <span className="text-[10px] bg-slate-500/10 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded font-bold">
-              Live
-            </span>
-          )}
-        </div>
-        <div className={`text-2xl font-mono font-bold ${isActive ? 'text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-200'}`}>
-          {price}
-        </div>
-        <div className="text-[10px] text-slate-500 mt-1 uppercase tracking-wider">TT Sell Price</div>
-      </div>
-    );
+  const handleSetPair = (pair: Pair) => {
+    setSlideDir(PAIRS.indexOf(pair) > PAIRS.indexOf(activePair) ? 'down' : 'up');
+    setActivePair(pair);
+    localStorage.setItem('activePair', pair);
+    setSidebarOpen(false);
   };
 
   return (
     <div className="flex flex-col h-full w-full bg-slate-50 dark:bg-[#0f172a] text-slate-800 dark:text-slate-100 font-sans transition-colors duration-300 relative">
-      
-      {/* Header */}
-      <header className="h-16 px-6 lg:px-8 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1e293b] shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="bg-emerald-500 p-1.5 rounded-lg shadow-sm">
-            <Activity className="w-5 h-5 text-white" strokeWidth={2.5} />
-          </div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">DBSTracker</h1>
-          <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-2 hidden sm:block"></div>
-          <div className="hidden sm:flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-900 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-800">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            LIVE FEED
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-4 lg:gap-6">
-          <div className="text-right hidden md:block">
-            <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Last Updated</div>
-            <div className="text-sm font-mono text-emerald-600 dark:text-emerald-400">
-              {effectiveDate || 'WAITING...'}
-            </div>
-          </div>
-          <button 
-            onClick={toggleTheme}
-            className="p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-500"
-            title="Toggle Theme"
-          >
-            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-          </button>
-        </div>
-      </header>
+      <Header
+        theme={theme}
+        effectiveDate={effectiveDate}
+        onToggleTheme={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+      />
 
-      {/* Body */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-        
-        {/* Mobile Sidebar overlay */}
-        {sidebarOpen && (
-          <div className="md:hidden absolute inset-0 z-40 bg-black/50 transition-opacity" onClick={() => setSidebarOpen(false)} />
-        )}
-
-        {/* Sidebar */}
-        <aside className={`absolute md:relative inset-y-0 left-0 z-50 w-64 md:w-72 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f172a] p-6 flex flex-col gap-6 shrink-0 shadow-2xl md:shadow-none overflow-y-auto`}>
-          <div className="flex justify-between items-center md:hidden mb-2">
-            <span className="font-bold text-slate-900 dark:text-white">Select Pair</span>
-            <button onClick={() => setSidebarOpen(false)} className="p-2 text-slate-500 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          <section>
-            <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-3 hidden md:block">Tracked Pairs</label>
-            <div className="space-y-3 flex flex-col gap-3">
-              {renderPairCard('SGD')}
-              {renderPairCard('USD')}
-            </div>
-          </section>
-        </aside>
-
-        {/* Main Chart Area */}
-        <main className="flex-1 flex flex-col p-4 sm:p-6 lg:p-8 bg-slate-50 dark:bg-[#0f172a] min-h-0 overflow-hidden w-full">
-          <div className="flex flex-row justify-between items-start sm:items-end mb-4 sm:mb-8 gap-4">
-            <div className="flex flex-col">
-              <span className="text-sm text-slate-500 font-medium mb-1 tracking-wide flex items-center gap-2">
-                <button onClick={() => setSidebarOpen(true)} className="md:hidden p-1 -ml-1 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded-md">
-                  <Menu className="w-5 h-5" />
-                </button>
-                DBS ForEx
-              </span>
-              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
-                {FLAGS[activePair]} {activePair} to {FLAGS.TWD} TWD
-                <span className="text-slate-500 font-light ml-2 text-lg sm:text-2xl hidden sm:inline">Exchange Rate</span>
-              </h2>
-            </div>
-            
-            <div className="hidden sm:flex bg-slate-200 dark:bg-slate-900 rounded-lg p-1 border border-slate-300 dark:border-slate-800 shadow-inner text-xs font-bold w-auto">
-              {(['30m', '1h', '12h', '1d', '1w', 'custom'] as Interval[]).map(inv => (
-                <button 
-                  key={inv}
-                  onClick={() => {
-                  handleSetInterval(inv);
-                }}
-                  className={`flex-1 sm:flex-none px-4 py-1.5 rounded-md transition-colors ${
-                    interval === inv 
-                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
-                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                  }`}
-                >
-                  {inv}
-                </button>
-              ))}
-            </div>
-          </div>
-          
-          {/* Chart Container */}
-          <div className="flex-1 relative bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-2xl overflow-hidden min-h-[300px]">
-            {loading && chartData.length === 0 ? (
-              <div className="absolute inset-0 flex items-center justify-center text-slate-400">
-                <RefreshCw className="w-6 h-6 animate-spin mr-2" />
-                <span className="font-mono text-sm tracking-widest">LOADING</span>
-              </div>
-            ) : (
-              <AnimatePresence custom={slideDir}>
-                <motion.div
-                  key={`${activePair}-${interval}-${customVal}-${customUnit}`}
-                  custom={slideDir}
-                  variants={chartVariants}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                  transition={{ duration: 0.25, ease: 'easeInOut' }}
-                  className="absolute inset-0"
-                >
-                  {chartData.length > 0 ? (
-                    <CandleChart data={chartData} isDark={theme === 'dark'} />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-slate-400">
-                      <span className="font-mono text-sm tracking-widest">NO DATA FOR {FLAGS[activePair]} {activePair}</span>
-                    </div>
-                  )}
-                </motion.div>
-              </AnimatePresence>
-            )}
-          </div>
-
-          {/* Mobile Interval Selector */}
-          <div className="flex sm:hidden mt-4 bg-slate-200 dark:bg-slate-900 rounded-lg p-1 border border-slate-300 dark:border-slate-800 shadow-inner text-xs font-bold w-full overflow-x-auto">
-            {(['30m', '1h', '12h', '1d', '1w', 'custom'] as Interval[]).map(inv => (
-              <button 
-                key={inv}
-                onClick={() => setInterval(inv)}
-                className={`flex-1 px-4 py-2 rounded-md transition-colors ${
-                  interval === inv 
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                }`}
-              >
-                {inv}
-              </button>
-            ))}
-          </div>
-        </main>
-
+        <Sidebar
+          isOpen={sidebarOpen}
+          activePair={activePair}
+          latestRates={latestRates}
+          onSelectPair={handleSetPair}
+          onClose={() => setSidebarOpen(false)}
+        />
+        <ChartArea
+          activePair={activePair}
+          interval={interval}
+          customVal={customVal}
+          customUnit={customUnit}
+          loading={loading}
+          isDark={theme === 'dark'}
+          slideDir={slideDir}
+          chartData={chartData}
+          onOpenSidebar={() => setSidebarOpen(true)}
+          onSetInterval={handleSetInterval}
+        />
       </div>
 
-      {/* Footer */}
-      <footer className="h-12 border-t border-slate-200 dark:border-slate-800 px-6 lg:px-8 flex items-center justify-between bg-white dark:bg-[#0f172a] text-[10px] uppercase tracking-widest text-slate-500 font-bold shrink-0 relative z-20">
-        <div className="flex items-center gap-4">
-          <a href="https://github.com/robothanzo/DBSTracker" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
-          </a>
-          <div className="hidden sm:block truncate pr-4">This website is in no way affiliated with DBS, the information is provided as-is without any liabilities attributable to the author.</div>
-        </div>
-        
-        <button 
-          className="sm:hidden px-2 py-1.5 bg-slate-200 dark:bg-slate-800 rounded font-bold text-slate-600 dark:text-slate-400"
-          onClick={() => setShowDisclaimer(true)}
-        >
-          Disclaimer
-        </button>
+      <Footer
+        activePair={activePair}
+        latestRates={latestRates}
+        onShowDisclaimer={() => setShowDisclaimer(true)}
+      />
 
-        <div className="flex gap-4 sm:gap-8 overflow-x-auto hide-scrollbar whitespace-nowrap">
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 
-            {FLAGS[activePair]} {activePair} BUY: {latestRates[activePair]?.ttBuy?.toFixed(3) || '...'}
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span> 
-            {FLAGS[activePair]} {activePair} SELL: {latestRates[activePair]?.ttSell?.toFixed(3) || '...'}
-          </div>
-        </div>
-      </footer>
-
-      {/* Mobile Disclaimer Modal */}
-      {showDisclaimer && (
-        <div className="sm:hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowDisclaimer(false)}>
-          <div className="bg-white dark:bg-[#1e293b] p-6 rounded-xl shadow-2xl max-w-sm w-full border border-slate-200 dark:border-slate-700" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Disclaimer</h3>
-            <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-400 mb-6">
-              This website is in no way affiliated with DBS, the information is provided as-is without any liabilities attributable to the author.
-            </p>
-            <button 
-              className="w-full py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg font-bold text-sm"
-              onClick={() => setShowDisclaimer(false)}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-      {/* Custom Interval Modal */}
+      {showDisclaimer && <DisclaimerModal onClose={() => setShowDisclaimer(false)} />}
       {showCustomInterval && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowCustomInterval(false)}>
-          <div className="bg-white dark:bg-[#1e293b] p-6 rounded-xl shadow-2xl max-w-sm w-full border border-slate-200 dark:border-slate-700" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Custom Interval</h3>
-            <div className="flex gap-4 mb-6">
-              <input 
-                type="number" 
-                min="1"
-                value={customVal}
-                onChange={(e) => setCustomVal(Number(e.target.value) || 1)}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-              <select 
-                value={customUnit}
-                onChange={(e) => setCustomUnit(e.target.value as 'm' | 'h' | 'd')}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="m">Minutes</option>
-                <option value="h">Hours</option>
-                <option value="d">Days</option>
-              </select>
-            </div>
-            <button 
-              className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold text-sm transition-colors"
-              onClick={() => setShowCustomInterval(false)}
-            >
-              Apply
-            </button>
-          </div>
-        </div>
+        <CustomIntervalModal
+          customVal={customVal}
+          customUnit={customUnit}
+          onChangeVal={setCustomVal}
+          onChangeUnit={setCustomUnit}
+          onClose={() => setShowCustomInterval(false)}
+        />
       )}
     </div>
   );
