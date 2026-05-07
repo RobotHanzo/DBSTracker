@@ -159,7 +159,7 @@ async function createServer() {
     app.use(vite.middlewares);
   } else {
     app.use(express.static(path.join(__dirname, 'dist')));
-    app.get('(.*)', (req, res) => {
+    app.use((_req, res) => {
       res.sendFile(path.join(__dirname, 'dist', 'index.html'));
     });
   }
