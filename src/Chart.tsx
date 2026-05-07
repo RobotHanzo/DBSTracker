@@ -31,29 +31,64 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+const ANIM_STYLE = `
+@keyframes candle-wick-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes candle-body-in {
+  from { opacity: 0; transform: scaleY(0); }
+  to   { opacity: 1; transform: scaleY(1); }
+}
+`;
+
+// Rendered by Recharts — receives staggerMs from the shape factory
 const Candlestick = (props: any) => {
-  const { x, y, width, height, payload } = props;
+  const { x, y, width, height, payload, index, staggerMs } = props;
   const { open, close, high, low } = payload;
-  
+
   const isGrowing = close >= open;
   const color = isGrowing ? '#10b981' : '#f43f5e';
-  
+
   const range = high - low;
   const ratio = range === 0 ? 0 : height / range;
-  
-  const openY = y + (high - open) * ratio;
+
+  const openY  = y + (high - open)  * ratio;
   const closeY = y + (high - close) * ratio;
-  
-  const bodyTop = Math.min(openY, closeY);
+
+  const bodyTop    = Math.min(openY, closeY);
   const bodyHeight = Math.max(Math.abs(openY - closeY), 1);
-  
-  const centerX = x + width / 2;
+
+  const centerX   = x + width / 2;
   const wickWidth = Math.max(width * 0.05, 1);
-  
+
+  // Each candle starts after the previous one has fully finished
+  const wickDelay = index * staggerMs;
+  const bodyDelay = wickDelay + Math.round(staggerMs * 0.4); // body starts after wick
+
+  // openY is the correct transform-origin for both directions:
+  //   bullish → openY = bottom of body → grows upward
+  //   bearish → openY = top of body   → grows downward
+  const bodyOriginY = openY;
+
   return (
     <g>
-      <line x1={centerX} y1={y} x2={centerX} y2={y + height} stroke={color} strokeWidth={wickWidth} />
-      <rect x={x + width * 0.1} y={bodyTop} width={width * 0.8} height={bodyHeight} fill={color} rx={1} />
+      <line
+        x1={centerX} y1={y} x2={centerX} y2={y + height}
+        stroke={color} strokeWidth={wickWidth}
+        style={{ animation: `candle-wick-in ${Math.round(staggerMs * 0.4)}ms ease-out ${wickDelay}ms both` }}
+      />
+      <rect
+        x={x + width * 0.1}
+        y={bodyTop}
+        width={width * 0.8}
+        height={bodyHeight}
+        fill={color} rx={1}
+        style={{
+          transformOrigin: `${centerX}px ${bodyOriginY}px`,
+          animation: `candle-body-in ${Math.round(staggerMs * 0.6)}ms cubic-bezier(0.34, 1.56, 0.64, 1) ${bodyDelay}ms both`,
+        }}
+      />
     </g>
   );
 };
@@ -66,7 +101,19 @@ export function CandleChart({ data, isDark }: ChartProps) {
     }));
   }, [data]);
 
-  // Calculate domain for Y axis to give some padding
+  // Sequential one-by-one: each candle gets staggerMs to complete before the next starts.
+  // Total budget = 3s max, so stagger = min(3000 / n, 120ms).
+  const staggerMs = useMemo(
+    () => Math.min(120, Math.round(3000 / Math.max(data.length, 1))),
+    [data.length]
+  );
+
+  // Shape factory so Candlestick receives staggerMs without React context
+  const CandlestickShape = useMemo(
+    () => (props: any) => <Candlestick {...props} staggerMs={staggerMs} />,
+    [staggerMs]
+  );
+
   const yMin = Math.min(...data.map(d => d.low));
   const yMax = Math.max(...data.map(d => d.high));
   const padding = (yMax - yMin) * 0.1 || 0.01;
@@ -74,28 +121,31 @@ export function CandleChart({ data, isDark }: ChartProps) {
   if (!data || data.length === 0) return null;
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={chartData} margin={{ top: 20, right: 20, left: 20, bottom: 20 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#334155' : '#e2e8f0'} vertical={false} />
-        <XAxis 
-          dataKey="time" 
-          tickFormatter={(time) => format(time, 'HH:mm')} 
-          stroke={isDark ? '#64748b' : '#94a3b8'}
-          tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 12 }}
-          tickMargin={10}
-          minTickGap={30}
-        />
-        <YAxis 
-          domain={[yMin - padding, yMax + padding]} 
-          orientation="right"
-          stroke={isDark ? '#64748b' : '#94a3b8'}
-          tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 12, fontFamily: 'monospace' }}
-          tickFormatter={(val) => val.toFixed(3)}
-          tickMargin={10}
-        />
-        <Tooltip content={<CustomTooltip />} cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }} />
-        <Bar dataKey="lowHigh" shape={<Candlestick />} isAnimationActive={false} />
-      </BarChart>
-    </ResponsiveContainer>
+    <>
+      <style>{ANIM_STYLE}</style>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={chartData} margin={{ top: 20, right: 20, left: 20, bottom: 20 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#334155' : '#e2e8f0'} vertical={false} />
+          <XAxis
+            dataKey="time"
+            tickFormatter={(time) => format(time, 'HH:mm')}
+            stroke={isDark ? '#64748b' : '#94a3b8'}
+            tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 12 }}
+            tickMargin={10}
+            minTickGap={30}
+          />
+          <YAxis
+            domain={[yMin - padding, yMax + padding]}
+            orientation="right"
+            stroke={isDark ? '#64748b' : '#94a3b8'}
+            tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 12, fontFamily: 'monospace' }}
+            tickFormatter={(val) => val.toFixed(3)}
+            tickMargin={10}
+          />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }} />
+          <Bar dataKey="lowHigh" shape={<CandlestickShape />} isAnimationActive={false} />
+        </BarChart>
+      </ResponsiveContainer>
+    </>
   );
 }

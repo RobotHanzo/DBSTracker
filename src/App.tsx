@@ -1,10 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, Moon, Sun, RefreshCw, Menu, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import axios from 'axios';
 import { CandleChart } from './Chart';
 
 type Pair = 'SGD' | 'USD';
 type Interval = '30m' | '1h' | '12h' | '1d' | '1w' | 'custom';
+
+const FLAGS: Record<string, string> = {
+  SGD: '🇸🇬',
+  USD: '🇺🇸',
+  TWD: '🇹🇼',
+};
 
 interface RateDoc {
   currency: string;
@@ -19,8 +26,12 @@ export default function App() {
       (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   });
 
-  const [activePair, setActivePair] = useState<Pair>('SGD');
-  const [interval, setInterval] = useState<Interval>('1h');
+  const [activePair, setActivePair] = useState<Pair>(
+    () => (localStorage.getItem('activePair') as Pair) || 'SGD'
+  );
+  const [interval, setInterval] = useState<Interval>(
+    () => (localStorage.getItem('interval') as Interval) || '1h'
+  );
   const [rates, setRates] = useState<RateDoc[]>([]);
   const [latestRates, setLatestRates] = useState<Record<string, RateDoc>>({});
   const [effectiveDate, setEffectiveDate] = useState<string>('');
@@ -30,6 +41,28 @@ export default function App() {
   const [showCustomInterval, setShowCustomInterval] = useState(false);
   const [customVal, setCustomVal] = useState<number>(1);
   const [customUnit, setCustomUnit] = useState<'m' | 'h' | 'd'>('h');
+  const [slideDir, setSlideDir] = useState<'left' | 'right' | 'up' | 'down'>('left');
+
+  const INTERVALS: Interval[] = ['30m', '1h', '12h', '1d', '1w', 'custom'];
+  const PAIRS: Pair[] = ['SGD', 'USD'];
+
+  const handleSetInterval = (inv: Interval) => {
+    const oldIdx = INTERVALS.indexOf(interval);
+    const newIdx = INTERVALS.indexOf(inv);
+    setSlideDir(newIdx > oldIdx ? 'left' : 'right');
+    if (inv === 'custom') setShowCustomInterval(true);
+    setInterval(inv);
+    localStorage.setItem('interval', inv);
+  };
+
+  const handleSetPair = (pair: Pair) => {
+    const oldIdx = PAIRS.indexOf(activePair);
+    const newIdx = PAIRS.indexOf(pair);
+    setSlideDir(newIdx > oldIdx ? 'down' : 'up');
+    setActivePair(pair);
+    localStorage.setItem('activePair', pair);
+    setSidebarOpen(false);
+  };
 
   // Sync theme to DOM
   useEffect(() => {
@@ -114,6 +147,20 @@ export default function App() {
 
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
 
+  const chartVariants = {
+    enter: (dir: typeof slideDir) => ({
+      opacity: 0,
+      x: dir === 'left' ? '100%' : dir === 'right' ? '-100%' : 0,
+      y: dir === 'down' ? '100%' : dir === 'up' ? '-100%' : 0,
+    }),
+    center: { opacity: 1, x: 0, y: 0 },
+    exit: (dir: typeof slideDir) => ({
+      opacity: 0,
+      x: dir === 'left' ? '-100%' : dir === 'right' ? '100%' : 0,
+      y: dir === 'down' ? '-100%' : dir === 'up' ? '100%' : 0,
+    }),
+  };
+
   // Helper for UI pair
   const renderPairCard = (pair: Pair) => {
     const isActive = activePair === pair;
@@ -134,8 +181,7 @@ export default function App() {
     return (
       <div 
         onClick={() => {
-          setActivePair(pair);
-          setSidebarOpen(false);
+          handleSetPair(pair);
         }}
         className={`p-4 rounded-xl border transition-all cursor-pointer ${
           isActive 
@@ -145,7 +191,7 @@ export default function App() {
       >
         <div className="flex justify-between items-start mb-1">
           <span className={`font-bold ${isActive ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>
-            {pair} / TWD
+            {FLAGS[pair]} {pair} / {FLAGS.TWD} TWD
           </span>
           {changePctStr ? (
             <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${isPositive ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : isNegative ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'}`}>
@@ -235,7 +281,7 @@ export default function App() {
                 DBS ForEx
               </span>
               <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
-                {activePair} to TWD 
+                {FLAGS[activePair]} {activePair} to {FLAGS.TWD} TWD
                 <span className="text-slate-500 font-light ml-2 text-lg sm:text-2xl hidden sm:inline">Exchange Rate</span>
               </h2>
             </div>
@@ -245,8 +291,7 @@ export default function App() {
                 <button 
                   key={inv}
                   onClick={() => {
-                  if (inv === 'custom') setShowCustomInterval(true);
-                  setInterval(inv);
+                  handleSetInterval(inv);
                 }}
                   className={`flex-1 sm:flex-none px-4 py-1.5 rounded-md transition-colors ${
                     interval === inv 
@@ -267,12 +312,27 @@ export default function App() {
                 <RefreshCw className="w-6 h-6 animate-spin mr-2" />
                 <span className="font-mono text-sm tracking-widest">LOADING</span>
               </div>
-            ) : chartData.length > 0 ? (
-               <CandleChart data={chartData} isDark={theme === 'dark'} />
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center text-slate-400">
-                 <span className="font-mono text-sm tracking-widest">NO DATA FOR {activePair}</span>
-              </div>
+              <AnimatePresence custom={slideDir}>
+                <motion.div
+                  key={`${activePair}-${interval}-${customVal}-${customUnit}`}
+                  custom={slideDir}
+                  variants={chartVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: 0.25, ease: 'easeInOut' }}
+                  className="absolute inset-0"
+                >
+                  {chartData.length > 0 ? (
+                    <CandleChart data={chartData} isDark={theme === 'dark'} />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-slate-400">
+                      <span className="font-mono text-sm tracking-widest">NO DATA FOR {FLAGS[activePair]} {activePair}</span>
+                    </div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
             )}
           </div>
 
@@ -315,11 +375,11 @@ export default function App() {
         <div className="flex gap-4 sm:gap-8 overflow-x-auto hide-scrollbar whitespace-nowrap">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 
-            {activePair} BUY: {latestRates[activePair]?.ttBuy?.toFixed(3) || '...'}
+            {FLAGS[activePair]} {activePair} BUY: {latestRates[activePair]?.ttBuy?.toFixed(3) || '...'}
           </div>
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span> 
-            {activePair} SELL: {latestRates[activePair]?.ttSell?.toFixed(3) || '...'}
+            {FLAGS[activePair]} {activePair} SELL: {latestRates[activePair]?.ttSell?.toFixed(3) || '...'}
           </div>
         </div>
       </footer>
