@@ -232,11 +232,11 @@ export default function App() {
                 <button onClick={() => setSidebarOpen(true)} className="md:hidden p-1 -ml-1 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded-md">
                   <Menu className="w-5 h-5" />
                 </button>
-                Market Analysis
+                DBS ForEx
               </span>
               <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
                 {activePair} to TWD 
-                <span className="text-slate-500 font-light ml-2 text-lg sm:text-2xl hidden sm:inline">Candlestick</span>
+                <span className="text-slate-500 font-light ml-2 text-lg sm:text-2xl hidden sm:inline">Exchange Rate</span>
               </h2>
             </div>
             
