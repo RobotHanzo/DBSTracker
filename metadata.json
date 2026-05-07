@@ -1,0 +1,6 @@
+{
+  "name": "DBSTracker",
+  "description": "Real-time currency conversion tracking between TWD, USD, and SGD.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
