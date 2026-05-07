@@ -38,8 +38,6 @@ mongoose.connect(MONGODB_URI, { dbName: 'DBSTracker' }).then(() => {
 const rateSchema = new mongoose.Schema({
   currency: { type: String, required: true },
   timestamp: { type: Date, required: true },
-  effectiveDate: { type: String, required: true },
-  lastUpdated: { type: String, required: true },
   ttBuy: Number,
   ttSell: Number,
   cashBuy: Number,
@@ -47,7 +45,7 @@ const rateSchema = new mongoose.Schema({
 });
 
 // Compound index to prevent duplicates
-rateSchema.index({ currency: 1, effectiveDate: 1 }, { unique: true });
+rateSchema.index({ currency: 1, timestamp: 1 }, { unique: true });
 
 const Rate = mongoose.model('Rate', rateSchema);
 
@@ -70,12 +68,10 @@ async function fetchAndStoreRates() {
     for (const rate of recData) {
       if (['USD', 'SGD'].includes(rate.currency)) {
         await Rate.findOneAndUpdate(
-          { currency: rate.currency, effectiveDate: effectiveDateStr },
+          { currency: rate.currency, timestamp: timeValue },
           {
             currency: rate.currency,
             timestamp: timeValue,
-            effectiveDate: effectiveDateStr,
-            lastUpdated: data.lastUpdatedDateAndTime,
             ttSell: rate.ttSell ? parseFloat(rate.ttSell) : null,
             ttBuy: rate.ttBuy ? parseFloat(rate.ttBuy) : null,
             cashSell: rate.cashSell ? parseFloat(rate.cashSell) : null,
@@ -110,17 +106,17 @@ app.get('/api/rates', async (req, res) => {
 });
 
 app.get('/api/latest', async (req, res) => {
-  if (!isDbConnected) return res.json({ rates: [], effectiveDate: null });
+  if (!isDbConnected) return res.json({ rates: [], timestamp: null });
   try {
     // Find highest timestamp
     const latestDoc = await Rate.findOne().sort({ timestamp: -1 });
     if (!latestDoc) {
-       return res.json({ rates: [], effectiveDate: null });
+       return res.json({ rates: [], timestamp: null });
     }
-    const latestRates = await Rate.find({ effectiveDate: latestDoc.effectiveDate });
+    const latestRates = await Rate.find({ timestamp: latestDoc.timestamp });
     res.json({
       rates: latestRates,
-      effectiveDate: latestDoc.effectiveDate
+      timestamp: latestDoc.timestamp
     });
   } catch (err) {
     res.status(500).json({ error: String(err) });

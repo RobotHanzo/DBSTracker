@@ -8,8 +8,6 @@ type Interval = '30m' | '1h' | '12h' | '1d' | '1w' | 'custom';
 
 interface RateDoc {
   currency: string;
-  effectiveDate: string;
-  lastUpdated: string;
   timestamp: string;
   ttSell: number;
 }
@@ -57,8 +55,8 @@ export default function App() {
         latestMap[r.currency] = r;
       });
       setLatestRates(latestMap);
-      if (latestRes.data.effectiveDate) {
-        setEffectiveDate(latestRes.data.effectiveDate);
+      if (latestRes.data.timestamp) {
+        setEffectiveDate(new Date(latestRes.data.timestamp).toLocaleString());
       }
     } catch (err) {
       console.error('Error fetching data', err);
