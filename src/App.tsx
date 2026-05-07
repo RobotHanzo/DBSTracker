@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Moon, Sun, RefreshCw } from 'lucide-react';
+import { Activity, Moon, Sun, RefreshCw, Menu, X } from 'lucide-react';
 import axios from 'axios';
 import { CandleChart } from './Chart';
 
@@ -26,6 +26,8 @@ export default function App() {
   const [latestRates, setLatestRates] = useState<Record<string, RateDoc>>({});
   const [effectiveDate, setEffectiveDate] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
 
   // Sync theme to DOM
   useEffect(() => {
@@ -112,7 +114,10 @@ export default function App() {
     // Quick pseudo percent change using chart data simulation or actual previous data if we wanted to
     return (
       <div 
-        onClick={() => setActivePair(pair)}
+        onClick={() => {
+          setActivePair(pair);
+          setSidebarOpen(false);
+        }}
         className={`p-4 rounded-xl border transition-all cursor-pointer ${
           isActive 
             ? 'bg-white dark:bg-[#1e293b] border-indigo-500 ring-1 ring-indigo-500/20 shadow-lg' 
@@ -137,7 +142,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-slate-50 dark:bg-[#0f172a] text-slate-800 dark:text-slate-100 font-sans transition-colors duration-300">
+    <div className="flex flex-col h-full w-full bg-slate-50 dark:bg-[#0f172a] text-slate-800 dark:text-slate-100 font-sans transition-colors duration-300 relative">
       
       {/* Header */}
       <header className="h-16 px-6 lg:px-8 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1e293b] shrink-0">
@@ -171,13 +176,24 @@ export default function App() {
       </header>
 
       {/* Body */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
         
+        {/* Mobile Sidebar overlay */}
+        {sidebarOpen && (
+          <div className="md:hidden absolute inset-0 z-40 bg-black/50 transition-opacity" onClick={() => setSidebarOpen(false)} />
+        )}
+
         {/* Sidebar */}
-        <aside className="w-full md:w-72 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f172a] p-6 flex flex-col gap-6 shrink-0 z-10 shadow-sm md:shadow-none overflow-y-auto">
+        <aside className={`absolute md:relative inset-y-0 left-0 z-50 w-64 md:w-72 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f172a] p-6 flex flex-col gap-6 shrink-0 shadow-2xl md:shadow-none overflow-y-auto`}>
+          <div className="flex justify-between items-center md:hidden mb-2">
+            <span className="font-bold text-slate-900 dark:text-white">Select Pair</span>
+            <button onClick={() => setSidebarOpen(false)} className="p-2 text-slate-500 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
           <section>
-            <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-3 block">Tracked Pairs</label>
-            <div className="space-y-3 flex flex-col sm:flex-row md:flex-col gap-3 sm:gap-4 md:gap-0">
+            <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-3 hidden md:block">Tracked Pairs</label>
+            <div className="space-y-3 flex flex-col gap-3">
               {renderPairCard('USD')}
               {renderPairCard('SGD')}
             </div>
@@ -185,16 +201,22 @@ export default function App() {
         </aside>
 
         {/* Main Chart Area */}
-        <main className="flex-1 flex flex-col p-4 sm:p-6 lg:p-8 bg-slate-50 dark:bg-[#0f172a] min-h-0 overflow-hidden">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 sm:mb-8 gap-4">
+        <main className="flex-1 flex flex-col p-4 sm:p-6 lg:p-8 bg-slate-50 dark:bg-[#0f172a] min-h-0 overflow-hidden w-full">
+          <div className="flex flex-row justify-between items-start sm:items-end mb-4 sm:mb-8 gap-4">
             <div className="flex flex-col">
-              <span className="text-sm text-slate-500 font-medium mb-1 tracking-wide">Market Analysis</span>
+              <span className="text-sm text-slate-500 font-medium mb-1 tracking-wide flex items-center gap-2">
+                <button onClick={() => setSidebarOpen(true)} className="md:hidden p-1 -ml-1 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded-md">
+                  <Menu className="w-5 h-5" />
+                </button>
+                Market Analysis
+              </span>
               <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
                 {activePair} to TWD 
-                <span className="text-slate-500 font-light ml-2 text-lg sm:text-2xl">Candlestick</span>
+                <span className="text-slate-500 font-light ml-2 text-lg sm:text-2xl hidden sm:inline">Candlestick</span>
               </h2>
             </div>
-            <div className="flex bg-slate-200 dark:bg-slate-900 rounded-lg p-1 border border-slate-300 dark:border-slate-800 shadow-inner text-xs font-bold w-full sm:w-auto overflow-x-auto">
+            
+            <div className="hidden sm:flex bg-slate-200 dark:bg-slate-900 rounded-lg p-1 border border-slate-300 dark:border-slate-800 shadow-inner text-xs font-bold w-auto">
               {(['5m', '15m', '1h'] as Interval[]).map(inv => (
                 <button 
                   key={inv}
@@ -226,13 +248,38 @@ export default function App() {
               </div>
             )}
           </div>
+
+          {/* Mobile Interval Selector */}
+          <div className="flex sm:hidden mt-4 bg-slate-200 dark:bg-slate-900 rounded-lg p-1 border border-slate-300 dark:border-slate-800 shadow-inner text-xs font-bold w-full overflow-x-auto">
+            {(['5m', '15m', '1h'] as Interval[]).map(inv => (
+              <button 
+                key={inv}
+                onClick={() => setInterval(inv)}
+                className={`flex-1 px-4 py-2 rounded-md transition-colors ${
+                  interval === inv 
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                {inv}
+              </button>
+            ))}
+          </div>
         </main>
 
       </div>
 
       {/* Footer */}
-      <footer className="h-12 border-t border-slate-200 dark:border-slate-800 px-6 lg:px-8 flex items-center justify-between bg-white dark:bg-[#0f172a] text-[10px] uppercase tracking-widest text-slate-500 font-bold shrink-0">
-        <div>DBS BANK TAIWAN · FOREX TRACKER</div>
+      <footer className="h-12 border-t border-slate-200 dark:border-slate-800 px-6 lg:px-8 flex items-center justify-between bg-white dark:bg-[#0f172a] text-[10px] uppercase tracking-widest text-slate-500 font-bold shrink-0 relative z-20">
+        <div className="hidden sm:block truncate pr-4">This website is in no way affiliated with DBS, the information is provided as-is without any liabilities attributable to the author.</div>
+        
+        <button 
+          className="sm:hidden px-2 py-1.5 bg-slate-200 dark:bg-slate-800 rounded font-bold text-slate-600 dark:text-slate-400"
+          onClick={() => setShowDisclaimer(true)}
+        >
+          Disclaimer
+        </button>
+
         <div className="flex gap-4 sm:gap-8 overflow-x-auto hide-scrollbar whitespace-nowrap">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 
@@ -244,6 +291,24 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Mobile Disclaimer Modal */}
+      {showDisclaimer && (
+        <div className="sm:hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowDisclaimer(false)}>
+          <div className="bg-white dark:bg-[#1e293b] p-6 rounded-xl shadow-2xl max-w-sm w-full border border-slate-200 dark:border-slate-700" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Disclaimer</h3>
+            <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-400 mb-6">
+              This website is in no way affiliated with DBS, the information is provided as-is without any liabilities attributable to the author.
+            </p>
+            <button 
+              className="w-full py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg font-bold text-sm"
+              onClick={() => setShowDisclaimer(false)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

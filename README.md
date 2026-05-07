@@ -65,3 +65,14 @@ docker run -p 3000:3000 -d --name dbstracker-app dbstracker
 The application will be accessible at [http://localhost:3000](http://localhost:3000).
 
 *Note: The SQLite database file (`currency.db`) is stored locally inside the container at `/app/currency.db`. For persistent data storage across container restarts, consider mounting a Docker volume to the application directory.*
+
+### 3. Automated Docker Hub Deployment (GitHub Actions)
+
+A GitHub Actions workflow is included to automatically build and push the Docker image to Docker Hub whenever you push to the `main` or `master` branch.
+
+To enable this:
+1. Go to your GitHub repository **Settings** > **Secrets and variables** > **Actions**.
+2. Add the following **Repository secrets**:
+   - `DOCKERHUB_USERNAME`: Your Docker Hub username.
+   - `DOCKERHUB_TOKEN`: A Personal Access Token (PAT) from Docker Hub (with Read/Write permissions).
+3. Push your code to the `main` branch. The action will automatically tag it as `latest` and push it to Docker Hub under your username as `dbstracker`.
