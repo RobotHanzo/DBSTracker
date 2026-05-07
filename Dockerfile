@@ -8,18 +8,16 @@ RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt
 WORKDIR /app
 
 # Copy dependency definitions
-COPY package*.json ./
-# If yarn.lock exists, copy it as well
-COPY yarn.lock* ./
+COPY package.json yarn.lock* ./
 
 # Install project dependencies
-RUN npm install
+RUN yarn install
 
 # Copy the rest of the application code
 COPY . .
 
 # Build the Vite React frontend for production
-RUN npm run build
+RUN yarn build
 
 # Expose the port the Express server listens on
 EXPOSE 3000
@@ -29,4 +27,4 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 # Start the Node.js server
-CMD ["npm", "start"]
+CMD ["yarn", "start"]
