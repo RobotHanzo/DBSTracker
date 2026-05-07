@@ -4,6 +4,9 @@ import mongoose from 'mongoose';
 import axios from 'axios';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -78,7 +81,7 @@ async function fetchAndStoreRates() {
             cashSell: rate.cashSell ? parseFloat(rate.cashSell) : null,
             cashBuy: rate.cashBuy ? parseFloat(rate.cashBuy) : null,
           },
-          { upsert: true, new: true, setDefaultsOnInsert: true }
+          { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
         );
       }
     }

@@ -3,7 +3,7 @@ import { Activity, Moon, Sun, RefreshCw, Menu, X } from 'lucide-react';
 import axios from 'axios';
 import { CandleChart } from './Chart';
 
-type Pair = 'USD' | 'SGD';
+type Pair = 'SGD' | 'USD';
 type Interval = '5m' | '15m' | '1h';
 
 interface RateDoc {
@@ -20,7 +20,7 @@ export default function App() {
       (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   });
 
-  const [activePair, setActivePair] = useState<Pair>('USD');
+  const [activePair, setActivePair] = useState<Pair>('SGD');
   const [interval, setInterval] = useState<Interval>('5m');
   const [rates, setRates] = useState<RateDoc[]>([]);
   const [latestRates, setLatestRates] = useState<Record<string, RateDoc>>({});
@@ -160,7 +160,7 @@ export default function App() {
         
         <div className="flex items-center gap-4 lg:gap-6">
           <div className="text-right hidden md:block">
-            <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Effective Date</div>
+            <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Last Updated</div>
             <div className="text-sm font-mono text-emerald-600 dark:text-emerald-400">
               {effectiveDate || 'WAITING...'}
             </div>
@@ -194,8 +194,8 @@ export default function App() {
           <section>
             <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-3 hidden md:block">Tracked Pairs</label>
             <div className="space-y-3 flex flex-col gap-3">
-              {renderPairCard('USD')}
               {renderPairCard('SGD')}
+              {renderPairCard('USD')}
             </div>
           </section>
         </aside>
