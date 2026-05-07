@@ -37,11 +37,11 @@ export function Footer({ activePair, latestRates, onShowDisclaimer }: FooterProp
       <div className="flex gap-4 sm:gap-8 overflow-x-auto hide-scrollbar whitespace-nowrap">
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-          {FLAGS[activePair]} {activePair} BUY: {latestRates[activePair]?.ttBuy?.toFixed(3) || '...'}
+          <span className="hidden sm:inline">{FLAGS[activePair]} {activePair} </span>BUY: {latestRates[activePair]?.ttBuy?.toFixed(3) || '...'}
         </div>
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-          {FLAGS[activePair]} {activePair} SELL: {latestRates[activePair]?.ttSell?.toFixed(3) || '...'}
+          <span className="hidden sm:inline">{FLAGS[activePair]} {activePair} </span>SELL: {latestRates[activePair]?.ttSell?.toFixed(3) || '...'}
         </div>
       </div>
     </footer>

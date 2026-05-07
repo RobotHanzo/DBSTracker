@@ -164,8 +164,9 @@ export function ChartArea({
   const dateRangeProps = { fromDate, toDate, presetHours, onFromDateChange, onToDateChange, onApplyPreset, onClearRange };
 
   return (
-    <main className="flex-1 flex flex-col p-4 sm:p-6 lg:p-8 bg-slate-50 dark:bg-[#0f172a] min-h-0 overflow-hidden w-full">
-      {/* Title row */}
+    <main className="flex-1 flex flex-col p-4 sm:p-6 lg:p-8 bg-slate-50 dark:bg-[#0f172a] min-h-0 overflow-y-auto sm:overflow-y-hidden w-full">
+      <div className="flex-1 flex flex-col min-h-full sm:min-h-0">
+        {/* Title row */}
       <div className="flex flex-row justify-between items-start sm:items-end mb-3 sm:mb-4 gap-4">
         <div className="flex flex-col">
           <span className="text-sm text-slate-500 font-medium mb-1 tracking-wide flex items-center gap-2">
@@ -243,8 +244,9 @@ export function ChartArea({
           </button>
         ))}
       </div>
+    </div>
 
-      {/* Mobile: date range pickers */}
+    {/* Mobile: date range pickers */}
       <div className="flex sm:hidden mt-3">
         <div className="w-full">
           <DateRangePicker {...dateRangeProps} mobile />
