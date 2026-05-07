@@ -114,8 +114,25 @@ app.get('/api/latest', async (req, res) => {
        return res.json({ rates: [], timestamp: null });
     }
     const latestRates = await Rate.find({ timestamp: latestDoc.timestamp });
+
+    // Find rates from 24 hours ago
+    const oneDayAgo = new Date(latestDoc.timestamp.getTime() - 24 * 60 * 60 * 1000);
+    const dayAgoDoc = await Rate.findOne({ timestamp: { $lte: oneDayAgo } }).sort({ timestamp: -1 });
+    let previousRates: any[] = [];
+    if (dayAgoDoc) {
+      previousRates = await Rate.find({ timestamp: dayAgoDoc.timestamp });
+    }
+
+    const ratesWithChange = latestRates.map(lr => {
+      const pr = previousRates.find(p => p.currency === lr.currency);
+      return {
+        ...lr.toObject(),
+        previousTtSell: pr ? pr.ttSell : null,
+      };
+    });
+
     res.json({
-      rates: latestRates,
+      rates: ratesWithChange,
       timestamp: latestDoc.timestamp
     });
   } catch (err) {

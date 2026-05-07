@@ -10,6 +10,7 @@ interface RateDoc {
   currency: string;
   timestamp: string;
   ttSell: number;
+  previousTtSell?: number;
 }
 
 export default function App() {
@@ -119,7 +120,17 @@ export default function App() {
     const latest = latestRates[pair];
     const price = latest?.ttSell ? latest.ttSell.toFixed(3) : '...';
     
-    // Quick pseudo percent change using chart data simulation or actual previous data if we wanted to
+    let changePctStr = '';
+    let isPositive = false;
+    let isNegative = false;
+    if (latest && latest.previousTtSell && latest.ttSell) {
+      const diff = latest.ttSell - latest.previousTtSell;
+      const pct = (diff / latest.previousTtSell) * 100;
+      isPositive = pct > 0;
+      isNegative = pct < 0;
+      changePctStr = `${isPositive ? '+' : ''}${pct.toFixed(2)}%`;
+    }
+
     return (
       <div 
         onClick={() => {
@@ -136,10 +147,15 @@ export default function App() {
           <span className={`font-bold ${isActive ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>
             {pair} / TWD
           </span>
-          {/* Mock percent for UI demo purposes since we don't calculate full 24h change yet */}
-          <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded font-bold">
-            Live
-          </span>
+          {changePctStr ? (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${isPositive ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : isNegative ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'}`}>
+              {changePctStr}
+            </span>
+          ) : (
+            <span className="text-[10px] bg-slate-500/10 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded font-bold">
+              Live
+            </span>
+          )}
         </div>
         <div className={`text-2xl font-mono font-bold ${isActive ? 'text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-200'}`}>
           {price}
